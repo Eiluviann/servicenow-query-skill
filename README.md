@@ -22,6 +22,7 @@
   <a href="#features">Features</a> ·
   <a href="#installation">Installation</a> ·
   <a href="#quick-start">Quick start</a> ·
+  <a href="#authentication">Authentication</a> ·
   <a href="#credentials-setup">Credentials</a> ·
   <a href="#cli-reference">CLI reference</a> ·
   <a href="#security">Security</a> ·
@@ -85,6 +86,42 @@ Get the active update set for user jdoe
 Claude summarises results inline. When building scripts or integrations it
 fetches structured JSON and uses it directly, without dumping raw API output
 into the conversation.
+
+---
+
+## Authentication
+
+### Current support
+
+Only **HTTP Basic Auth** is currently supported. Credentials are passed as a
+`username:password` pair with every request.
+
+OAuth 2.0 support is planned for a future release. Until then, follow the
+account recommendations below to minimise risk.
+
+### Recommended account setup
+
+> [!IMPORTANT]
+> Do not use an account with write access to your instance with this tool until
+> OAuth is implemented. Basic Auth credentials stored in a file grant the same
+> level of access as the account itself — a read-only account strictly limits
+> the blast radius if credentials are ever compromised.
+
+Create a dedicated service account for this tool, for example:
+
+```
+username:  aureliosolis.readonly
+```
+
+Assign it the following roles:
+
+| Role | Purpose |
+|---|---|
+| `snc_read_only` | Enforces read-only access at the platform level — prevents any writes regardless of other permissions |
+| `admin` | Required to query all tables, including restricted ones like `sys_dictionary` and `sys_properties` |
+
+This combination gives the tool full read visibility across the instance while
+making writes impossible even if the credentials are misused.
 
 ---
 
