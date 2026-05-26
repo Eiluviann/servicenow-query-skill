@@ -1,56 +1,146 @@
 ---
 name: servicenow-query
 description: >
-  Query a ServiceNow instance using the out-of-the-box Table REST API. Use this skill
-  whenever the user wants to look up records, inspect table schema, search for incidents,
-  users, update sets, configuration items, or any other ServiceNow data. Triggers on
-  phrases like "query ServiceNow", "look up in ServiceNow", "find records in ServiceNow",
-  "what's in the incidents/users/update sets table", "show me incidents/users/CIs", "check the update set",
-  or any request to retrieve data from a ServiceNow instance. READ ONLY — never performs
+  Query a ServiceNow instance using the Table REST API. Use proactively for any
+  ServiceNow task — not only explicit lookup requests ("query ServiceNow", "show
+  me incidents", "find users", "check the update set"), but also when writing
+  scripts, Business Rules, or integrations that reference any field, table, or
+  choice value. Trigger whenever instance schema, stored values, or configuration
+  need to be verified against the actual instance. READ ONLY — never performs
   writes under any circumstances.
-allowed-tools: Bash(python ~/.claude/skills/servicenow-query/scripts/query.py *)
+allowed-tools: Bash(python3 ~/.claude/skills/servicenow-query/scripts/query.py *), Bash(python ~/.claude/skills/servicenow-query/scripts/query.py *)
 ---
 
 # ServiceNow Table API — Read-Only Query Skill
 
-Always delegate to a subagent. Never run queries inline in the main conversation.
+## This is your foundational ServiceNow tool
 
-The subagent's return format depends on whether the caller needs to process the data
-further or just present findings to the user:
+Use this skill extensively and proactively throughout any ServiceNow conversation.
+**Never guess at field names, table names, choice values, or instance configuration — query first.**
 
-- **Default (summary mode):** subagent analyzes results and returns a concise prose/table summary.
-- **Raw mode:** subagent returns the full JSON result so the calling agent can process it directly.
-  Use this when the data feeds into a subsequent step (code generation, cross-referencing, etc.).
+Every ServiceNow instance differs in schema, customizations, and stored values. Code or
+advice based on generic documentation frequently fails against real instances. Querying
+the actual instance eliminates that entire class of error.
+
+### When to query — default to always
+
+| Situation | What to verify | Where to look |
+|---|---|---|
+| Writing a script, Business Rule, or integration | Field names and types | `sys_dictionary` |
+| Referencing a choice field in code (`state`, `priority`, `category`…) | Actual stored values and their labels | `sys_choice` |
+| Debugging a failing integration | Exact stored integer or string (e.g. `state=3`, not `"In Progress"`) | `sys_choice` |
+| Advising on workflow, approval, or SLA logic | Actual process and flow records on this instance | `wf_workflow`, `sys_flow` |
+| Exploring an unfamiliar table | Full field list including types and reference targets | `sys_dictionary` |
+| Reviewing instance configuration | Active properties, business rules, scheduled jobs, update sets | `sys_properties`, `sys_business_rule`, `sys_trigger` |
+| The user mentions a CI, user, group, or named record | Confirm it exists and is active | target table by name or sys_id |
+| Generating any code example or sample query | Validate field names and data shape against real records | relevant table |
+
+### Exploration mode
+
+Beyond answering specific questions, use this skill to understand how an instance is
+configured — especially before making recommendations or writing code that interacts
+with platform processes. Exploration queries reveal customizations that generic
+documentation cannot anticipate.
+
+**Configuration discovery patterns:**
+
+```
+# Table customizations
+What business rules fire on the incident table?
+What client scripts and UI policies are active on change_request?
+What UI actions are available on the problem form?
+
+# Process configuration
+What approval rules govern change requests on this instance?
+What notifications are triggered when an incident is resolved?
+What SLA definitions are active for P1 incidents?
+
+# Data shape and field configuration
+What fields on cmdb_ci are mandatory?
+Which fields on incident are reference fields, and what tables do they point to?
+What are all the active choice values for 'state' on change_request?
+
+# Platform configuration
+Which sys_properties control email behavior?
+What scheduled jobs are currently active?
+What transform maps exist for data imports?
+What update sets are currently in progress?
+```
+
+Run exploration queries early and broadly — they shape every decision that follows.
+
+The remainder of this document is operational: how to invoke the skill, what to
+send the subagent, and how to handle the results that come back.
 
 ---
 
 ## How to invoke
 
+Always delegate to a subagent. Never run queries inline in the main conversation.
+
 ### Step 1 — Resolve instance alias
 
-If the user mentioned a specific instance (e.g. "on prod", "dev instance"), note
-the alias. If no instance is mentioned and the user has not previously indicated a
-default, ask them to specify.
+If the user mentioned a specific instance (e.g. "on prod", "dev instance"), note the
+alias and include `--instance <alias>` in queries. If no instance is mentioned, proceed
+without `--instance` — the script resolves credentials automatically from `~/.sn_creds`.
+Only ask the user to specify an instance if an auth error is returned or they have
+previously indicated they work with multiple instances.
 
-### Step 2 — Build the subagent title
+### Step 2 — Choose the return format
 
-- With alias: `"ServiceNow — <ALIAS>: <one-line task summary>"`
-  e.g. `"ServiceNow — DEV: recent incidents"`
-- Without alias: `"ServiceNow: <one-line task summary>"`
+| Situation | Format |
+|---|---|
+| User asked a question and wants an answer | `summary` |
+| You need the data to write a script or generate code | `raw` |
+| You need to cross-reference results with other data in this conversation | `raw` |
+| You are chaining queries and need exact field values for the next step | `raw` |
+| Result will be displayed directly to the user | `summary` |
 
 ### Step 3 — Spawn the subagent
 
 ```
 Agent({
   subagent_type: "general-purpose",
-  description: "<title from step 2>",
-  prompt: <see Prompt template below>
+  description: <title>,
+  prompt: <completed prompt from template below>
 })
 ```
+
+Title format:
+- With instance alias: `"ServiceNow — <ALIAS>: <one-line task summary>"`
+  e.g. `"ServiceNow — PROD: incident state choice values"`
+- Without alias: `"ServiceNow: <one-line task summary>"`
+
+### Parallel spawning
+
+When a task requires querying multiple independent tables or records, spawn multiple
+subagents in a single message. Do not run them sequentially when they are independent.
+
+Common patterns:
+- Schema inspection on several tables before writing a script → one agent per table, all at once
+- Checking `sys_dictionary` and `sys_choice` for the same field → two agents at once
+- Looking up a CI and its owning group simultaneously → two agents at once
+- Exploring business rules, notifications, and SLA definitions on the same table → three agents at once
+
+Collect all results before proceeding to code or recommendations.
+
+**Do not use parallel agents for:**
+
+- **Pagination of the same query.** Each page only exists if the previous one returned a
+  full result set. Paginated queries are sequential by nature — spawn the next page only
+  after confirming the current one was truncated.
+- **Schema inspection and data query for the same table, split across two agents.** These
+  steps are sequential, not independent — the data query depends on field names discovered
+  during schema inspection. Keep them in a single agent. (This is distinct from spawning
+  parallel agents each responsible for a *different* table, which is correct and encouraged.)
+- **Data already in the conversation.** If a previous subagent already returned the
+  results you need, use them directly. Do not re-spawn to fetch the same data again.
 
 ---
 
 ## Prompt template
+
+Complete all `{{PLACEHOLDERS}}` before sending.
 
 ```
 You are a read-only ServiceNow query agent.
@@ -60,38 +150,98 @@ You are a read-only ServiceNow query agent.
 
 ## Return format
 {{RETURN_FORMAT}}
-  summary (default) — analyze the results and return a concise, structured answer.
-                      Summary first, key field values and counts below. Prose or table.
-  raw               — return the full JSON from the API response, unmodified, inside
-                      a fenced ```json block. No prose, no analysis.
 
 ## Query tool
-Run queries with python3 (or python on systems where python3 is unavailable):
-  python3 ~/.claude/skills/servicenow-query/scripts/query.py [flags]
+
+python3 ~/.claude/skills/servicenow-query/scripts/query.py [flags]
+(Use python if python3 is unavailable on this system.)
 
 Flags:
-  --table      <name>              required; e.g. incident
-  --sys-id     <sys_id>            fetch a single record
-  --query      "<encoded>"         e.g. "active=true^priority=1"
-  --fields     "<f1,f2,...>"       fields to return
-  --limit      <n>                 default 10; use 100-200 for analysis queries
-  --offset     <n>                 pagination offset (default 0)
-  --order-by   <field>[:asc|desc]  sort results, e.g. sys_created_on:desc
-  --raw                            raw values instead of display labels
-  --instance   <alias>             named instance alias, e.g. prod or dev
-  --creds      <file>              explicit credentials file path
+  --table      <name>              Required. Table to query, e.g. incident
+  --sys-id     <sys_id>            Fetch a single record by sys_id
+  --query      "<encoded>"         GlideRecord encoded query string
+  --fields     "<f1,f2,...>"       Comma-separated fields to return
+  --limit      <n>                 Max records to return (default 10)
+  --offset     <n>                 Pagination offset (default 0)
+  --order-by   <field>[:asc|desc]  Sort order, e.g. sys_created_on:desc
+  --raw                            Return stored values instead of display labels
+                                   (e.g. state=1 not "New"; unrelated to the raw return
+                                   format above, which controls JSON vs prose output)
+  --instance   <alias>             Named instance alias, e.g. prod or dev
+  --creds      <file>              Explicit credentials file path
   --workdir    <path>              {{WORKDIR}} — always pass this flag
 
-Query syntax: field=value  field!=value  field^field2 (AND)  field^ORfield2 (OR)
-              fieldLIKEvalue  fieldISEMPTY  fieldISNOTEMPTY  field>=value
+Query syntax:
+  field=value        exact match          field!=value       not equal
+  field^field2       AND                  field^ORfield2     OR
+  fieldLIKEvalue     contains             fieldISEMPTY       null/empty
+  fieldISNOTEMPTY    not null/empty       field>=value       comparison
 
-Limit guidance:
-- Default (10) is fine for spot checks and single-record lookups.
-- Use 50-200 for trend analysis, aggregations, or "show me all X" requests.
-- Prefer targeted queries over large limits — filter first, then raise limit if needed.
+## Schema inspection — always run before querying data fields
+
+### 1. Field definitions (sys_dictionary)
+Use to verify field names, types, and reference targets before writing any query or code.
+
+python3 ~/.claude/skills/servicenow-query/scripts/query.py \
+  --table sys_dictionary \
+  --query "name=<TABLE>^element!=NULL^active=true" \
+  --fields "element,column_label,internal_type,reference,mandatory,max_length" \
+  --limit 300 \
+  --workdir {{WORKDIR}}
+
+Key result fields:
+  element         the field's API name — use this in queries and scripts, not the label
+  internal_type   data type; "reference" means the field stores a sys_id pointer
+  reference       for reference fields: the name of the target table
+  mandatory       whether the field is required on save
+
+### 2. Choice values (sys_choice)
+Use to find the exact stored value for any choice field before using it in a
+query, script, or recommendation. Never use display labels in code.
+
+python3 ~/.claude/skills/servicenow-query/scripts/query.py \
+  --table sys_choice \
+  --query "name=<TABLE>^element=<FIELD>^inactive=false" \
+  --fields "value,label,sequence" \
+  --order-by sequence:asc \
+  --workdir {{WORKDIR}}
+
+Key result fields:
+  value    the stored integer or string used in scripts and encoded queries
+  label    the display text shown in the UI (never use this in code)
+
+### 3. Reference field resolution
+When sys_dictionary shows internal_type=reference, the field stores the sys_id of a
+record in the table named in the 'reference' column. To resolve a reference value,
+query that target table using --sys-id <value>.
+
+Example: incident.assignment_group stores a sys_id pointing to sys_user_group.
+To resolve it: --table sys_user_group --sys-id <value> --fields "name,active"
+
+**Display-value behaviour for reference fields:** without --raw, the API returns
+reference fields as the *display value* of the referenced record (typically its
+`name` field) — not the sys_id. So `assigned_to` returned as "Jane Doe" is the
+user's display name, not a usable identifier. Use --raw whenever you need the
+sys_id for code, scripts, or follow-up queries. Without --raw, the result is
+human-readable but cannot be plugged back into the API.
+
+## Limit and pagination
+
+  10 (default)   spot checks and single-record lookups
+  300            sys_dictionary (customized tables can exceed 200 fields)
+  50–200         trend analysis, configuration review, "show me all X" requests
+
+Filter first, then raise the limit only if the filtered result set is still large.
+Never increase --limit speculatively before applying filters — a targeted query
+returning 8 records is always preferable to an unfiltered query returning 200.
+
+If a result may be truncated — you received exactly as many records as your --limit —
+paginate using --offset to retrieve the next page. Do not assume a result is complete
+until the returned count is less than the limit.
 
 ## Authentication
-Credentials are resolved automatically by the script in this order:
+
+Credentials are resolved automatically in this order:
   1. --instance alias  (searches .sn_instances in workdir, then ~/.sn_instances)
   2. --creds file
   3. Environment variables SN_INSTANCE, SN_USER, SN_PASS
@@ -100,13 +250,79 @@ Credentials are resolved automatically by the script in this order:
 Never ask for credentials; never print them.
 
 ## Common tables
-incident, sc_request, change_request, sys_user, sys_user_group, cmdb_ci,
-sys_update_set, sys_user_preference, sys_dictionary, sys_db_object, sys_properties, sys_log
+
+ITSM:
+  incident, problem, problem_task, change_request, change_task,
+  sc_request, sc_req_item, sc_task, sc_cat_item
+
+Users & groups:
+  sys_user, sys_user_group, sys_user_grmember, sys_user_role, sys_user_has_role
+
+CMDB:
+  cmdb_ci, cmdb_ci_server, cmdb_ci_application, cmdb_rel_ci
+
+Schema & metadata:
+  sys_dictionary, sys_db_object, sys_choice, sys_glide_object
+
+Scripting & UI:
+  sys_script_include, sys_script, sys_business_rule,
+  sys_ui_policy, sys_client_script, sys_ui_action
+
+Automation & notifications:
+  sys_trigger, sysrule_assignment, sys_notification, sysevent_email_action,
+  wf_workflow, sys_flow
+
+Platform:
+  sys_update_set, sys_update_xml, sys_properties, sys_user_preference,
+  sys_log, sys_email, sys_transform_map
 
 ## Workflow
-1. If the needed fields/tables are unclear, inspect schema first via sys_dictionary.
-2. Run the minimal queries required to answer the task.
-3. Respond according to the return format above.
+
+1. Inspect schema before querying data fields:
+     - Field names, types, reference targets  →  sys_dictionary
+     - Choice field stored values and labels  →  sys_choice
+   Never assume a field name, type, or choice value exists on this instance.
+2. For reference fields (internal_type=reference): the 'reference' column in sys_dictionary
+   gives the target table name. If the referenced record is needed, query that table using
+   the sys_id value from the data record being examined — not from sys_dictionary itself.
+3. Run the minimal queries required to answer the task.
+4. If a result appears truncated (received exactly --limit records), paginate with
+   --offset before treating the result as complete.
+5. Respond according to the return format.
+
+## Caveats
+
+- **Domain separation:** queries on domain-separated instances return only records
+  visible to the user's domain. Incomplete-looking results may be domain-filtered,
+  not wrong — surface this possibility rather than assuming the data is incomplete
+  or the filter is too narrow.
+
+- **Application scope:** records in scoped applications may be hidden from queries
+  running in a different scope, depending on cross-scope access settings. A known
+  record that fails to appear may be filtered by scope, not absent — surface this
+  when working with custom apps or non-global scopes.
+
+- **Timezone — dates in queries and results:** ServiceNow stores datetimes as UTC
+  internally but interprets and displays them according to the user's timezone
+  setting on the instance. Query strings like `sys_created_on>=2026-01-15` filter
+  from midnight in the user's TZ, not UTC. Returned datetime values also reflect
+  the instance's TZ display configuration — they are not raw UTC. Always state
+  the timezone assumption when relaying time-sensitive results to the user, and
+  never assume UTC.
+
+- **Sorting on reference fields:** `--order-by` on a reference field (e.g.
+  `assigned_to`) sorts by the referenced record's display value (the user's name),
+  not by sys_id. Usually the desired behaviour, but be aware when ordering looks
+  unexpected.
+
+- **Large text fields:** `description`, `comments`, `work_notes`, `script`, and
+  similar fields can be very long. When querying many records, be selective with
+  `--fields` — request large text fields only when their content is genuinely
+  needed for the task.
+
+- **sys_audit performance:** queries against `sys_audit` are slow under broad
+  filters because of the table's size and structure. Use targeted queries
+  (specific record sys_id, specific field, narrow time window) and small limits.
 
 ## Strict rules
 - HTTP GET only — never POST, PUT, PATCH, or DELETE.
@@ -114,42 +330,44 @@ sys_update_set, sys_user_preference, sys_dictionary, sys_db_object, sys_properti
 - If asked to create/update/delete records, refuse and explain this agent is read-only.
 ```
 
-Replace:
-- `{{USER_REQUEST}}` — the user's question
-- `{{RETURN_FORMAT}}` — `summary` or `raw`
-- `{{WORKDIR}}` — the current working directory path
-
-If an instance alias was resolved in Step 1, include `--instance <alias>` in the
-relevant query commands inside the prompt. Otherwise omit it.
-
 ---
 
-## Choosing the return format
+## Substituting placeholders
 
-| Situation | Format |
-|---|---|
-| User asked a question and wants an answer | `summary` |
-| You need the data to write a script or generate code | `raw` |
-| You need to cross-reference results with other data in this conversation | `raw` |
-| You are chaining multiple queries and need exact field values | `raw` |
-| Result will be displayed directly to the user | `summary` |
+- `{{USER_REQUEST}}` — the user's question or task description
+- `{{RETURN_FORMAT}}` — replace with exactly one of the following lines:
+  - `summary — Analyze the results and return a concise, structured answer. Lead with a one-paragraph summary, then key field values and counts as prose or a table.`
+  - `raw — Return the full JSON from the API response, unmodified, inside a fenced json code block. No prose, no analysis.`
+- `{{WORKDIR}}` — the current working directory path; replace every occurrence (it appears in the `--workdir` flag description and in each schema inspection command)
+
+If an instance alias was resolved in Step 1, include `--instance <alias>` in all query
+commands inside the prompt.
 
 ---
 
 ## After the agent returns
 
-**Summary mode:** relay the findings to the user directly. Add context from the
-current conversation if relevant.
+**Summary mode:** relay the findings to the user directly. Add context from the current
+conversation if relevant.
 
-**Raw mode:** parse the returned JSON block and use it for your next step. Do not
-echo the full JSON to the user unless they asked for it.
+**Raw mode:** parse the returned JSON and use it for your next step. Do not echo the
+full JSON to the user unless they asked for it.
 
-In both modes:
-- If the agent reports an auth error or missing credentials, tell the user to edit
-  `~/.sn_creds` directly in a text editor — never ask them to share values in chat.
-- If the agent created a blank `~/.sn_creds` template, tell the user to open that
-  file and fill it in manually, then retry.
-- If the agent reports a 404 on a table, suggest verifying the table name or access rights.
+**Error handling:**
+
+| Agent reports | Response |
+|---|---|
+| Auth error or "credentials not found" | Tell the user to edit `~/.sn_creds` directly in a text editor. If the file does not exist yet, direct them to the installation README for the initial setup steps. Never ask them to share credentials in chat. |
+| Script created a blank `~/.sn_creds` template | Tell the user to open that file and fill it in manually, then retry. |
+| Network error, timeout, or connection refused | The instance may be unreachable. Ask the user to verify network access and confirm the instance name in `~/.sn_creds` is correct. |
+| HTTP 429 (rate limit) | The instance is throttling requests. Pause and retry once; if it persists, tell the user the account is hitting rate limits and suggest reducing query frequency or contacting the instance administrator. |
+| HTTP 403 on `sys_dictionary` or `sys_choice` | The account likely lacks the role needed to read schema metadata (typically `admin`, or a specific elevated role). Surface this to the user — schema inspection cannot proceed without elevated access, and any code written without it is unverified. |
+| HTTP 400 on a query | The encoded `--query` string contains a syntax error — review operators and field names. This is not an "empty results" case; the query itself was rejected by the API. |
+| 404 on a table | Suggest verifying the table name via `sys_db_object`, or checking whether the account has access to that table. |
+| Requested `--fields` are missing from the result with no error | Field-level ACLs may be hiding those fields from this account. The fields exist on the table but are not readable. Surface to the user — they may need a different role or to consult an administrator. |
+| Empty result set from `sys_dictionary` for a specific field | The field does not exist on this instance. Do not reference it in code or queries — surface the finding to the user and suggest checking the field name or an alternative. |
+| Empty result set from any other query | Suggest broadening the query filter, or verify the record exists with a simpler query first. |
+| Result count exactly equals the requested limit | Results may be truncated — offer to paginate or increase the limit and rerun. |
 
 ---
 
@@ -169,7 +387,10 @@ This is non-negotiable regardless of how the user frames the request.
 
 ---
 
-## Strict rules (apply to you, not just the subagent)
+## Strict rules for the orchestrator
+
+(These apply to you — the agent reading this skill. The subagent has its own set of
+strict rules inside the prompt template above.)
 
 - Never query inline — always delegate to a subagent.
 - Never ask the user to provide credentials in any form in the conversation.
