@@ -31,8 +31,6 @@
   <a href="#sponsors">Sponsors</a>
 </p>
 
----
-
 ## Features
 
 - **Plain-English queries** — describe what you want; Claude builds and runs the query
@@ -42,15 +40,11 @@
 - **Multi-instance support** — switch between dev, test, and prod (or multiple clients) with named aliases
 - **Zero dependencies** — standard library only; nothing to install beyond Python 3.9
 
----
-
 ## Requirements
 
 - [Claude Code](https://claude.ai/claude-code) (any recent version)
 - Python 3.9 or later
 - Network access to your ServiceNow instance
-
----
 
 ## Installation
 
@@ -67,8 +61,6 @@ git clone https://github.com/Eiluviann/servicenow-query-skill \
 ```
 
 No build step. No `pip install`. That's it.
-
----
 
 ## Quick start
 
@@ -88,15 +80,11 @@ Claude summarises results inline. When building scripts or integrations it
 fetches structured JSON and uses it directly, without dumping raw API output
 into the conversation.
 
----
-
 ## Examples
 
 ### Operational queries
 
 Day-to-day lookups answered in plain English, directly in your conversation.
-
----
 
 **Incident triage**
 ```
@@ -106,8 +94,6 @@ assigned team. Include the caller, category, and short description.
 > Claude queries the incident table filtered by priority and opened time,
 > groups unassigned records, and returns a triage-ready summary.
 
----
-
 **Change management**
 ```
 How many emergency change requests were raised this month, and which teams
@@ -116,16 +102,12 @@ raised the most?
 > Claude fetches change_request records, aggregates by requested-by group,
 > and returns a ranked breakdown.
 
----
-
 **User administration**
 ```
 Find all active admin accounts that have not logged in for more than 90 days.
 ```
 > Claude cross-queries sys_user with last_login_time and the admin role
 > assignment to return a focused list for review.
-
----
 
 **Update set tracking**
 ```
@@ -134,16 +116,12 @@ What update sets are currently in progress, and who owns them?
 > Claude queries sys_update_set for in-progress records and returns a table
 > of update set names, owners, and last-modified dates.
 
----
-
 ### Instance-validated development
 
 This is where the skill becomes a genuine force multiplier. Instead of writing
 code based on guesswork or generic documentation, Claude inspects your actual
 instance first — then writes code that is correct for your specific schema,
 field names, and data.
-
----
 
 **Writing a Business Rule**
 ```
@@ -156,8 +134,6 @@ actual field names and valid choice values on my instance first.
 > category and subcategory, then generates a Business Rule with the correct
 > field references and values — not guesses.
 
----
-
 **Building a Script Include**
 ```
 Create a Script Include that retrieves all open incidents for a given
@@ -166,8 +142,6 @@ assignment group, sorted by priority. Use the real field names from my instance.
 > Claude inspects the incident table schema, confirms the assignment_group
 > reference field name and the priority field's sort order, then produces
 > a Script Include with accurate GlideRecord queries.
-
----
 
 **Debugging a broken integration**
 ```
@@ -178,8 +152,6 @@ change_request to 'Implement'. What is the actual stored value for that state?
 > database value — solving in seconds what would otherwise require digging
 > through Studio or the platform UI.
 
----
-
 **Generating a REST API call**
 ```
 Write a Python script that fetches all CIs of type 'Linux Server' from my
@@ -189,8 +161,6 @@ instance. Include only the fields that actually exist on my cmdb_ci table.
 > their API names, then generates a Python script using the correct field list
 > for your specific instance configuration.
 
----
-
 **Validating assumptions before a migration**
 ```
 Before I run my data migration, confirm that the 'u_customer_ref' field exists
@@ -199,8 +169,6 @@ on the incident table and show me its type and max length.
 > Claude queries sys_dictionary and returns the field's internal type,
 > max_length, and mandatory flag — letting you catch schema mismatches before
 > the migration runs.
-
----
 
 ## Authentication
 
@@ -235,8 +203,6 @@ Assign it the following roles:
 
 This combination gives the tool full read visibility across the instance while
 making writes impossible even if the credentials are misused.
-
----
 
 ## Credentials setup
 
@@ -300,8 +266,6 @@ Individual environment variables can fill gaps left by a partial credentials fil
 for example, `SN_INSTANCE` from the environment combined with `SN_USER`/`SN_PASS`
 from `.sn_creds`.
 
----
-
 ## CLI reference
 
 `scripts/query.py` can be run directly from a terminal without Claude Code:
@@ -364,8 +328,6 @@ python3 scripts/query.py \
   --limit 20
 ```
 
----
-
 ## Repository layout
 
 ```
@@ -379,8 +341,6 @@ servicenow-query-skill/
 
 `SKILL.md` is the Claude Code skill manifest. It is not needed to run
 `query.py` directly from a terminal.
-
----
 
 ## Security
 
@@ -412,20 +372,14 @@ results. Concretely:
 | No third-party dependencies | Standard library only — zero supply-chain risk |
 | Credential leak detection | Credentials pasted into a conversation are refused; the skill instructs immediate rotation |
 
----
-
 ## Contributing
 
 Bug reports and pull requests are welcome. For significant changes please open
 an issue first to discuss what you'd like to change.
 
----
-
 ## Contributors
 
 <!-- Contributors will be listed here -->
-
----
 
 ## Sponsors
 
@@ -434,7 +388,5 @@ Thanks to the following for supporting this project:
 <p>
   <a href="https://nelem.eu"><img src="https://nelem.eu/wp-content/uploads/2024/12/Nelem-white-1.webp" alt="Nelem" height="32"/></a>
 </div>
-
----
 
 *Built for [Claude Code](https://claude.ai/claude-code)*
