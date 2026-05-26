@@ -22,6 +22,7 @@
   <a href="#features">Features</a> ·
   <a href="#installation">Installation</a> ·
   <a href="#quick-start">Quick start</a> ·
+  <a href="#examples">Examples</a> ·
   <a href="#authentication">Authentication</a> ·
   <a href="#credentials-setup">Credentials</a> ·
   <a href="#cli-reference">CLI reference</a> ·
@@ -86,6 +87,118 @@ Get the active update set for user jdoe
 Claude summarises results inline. When building scripts or integrations it
 fetches structured JSON and uses it directly, without dumping raw API output
 into the conversation.
+
+---
+
+## Examples
+
+### Operational queries
+
+Day-to-day lookups answered in plain English, directly in your conversation.
+
+---
+
+**Incident triage**
+```
+Show me all P1 and P2 incidents opened in the last 24 hours that have no
+assigned team. Include the caller, category, and short description.
+```
+> Claude queries the incident table filtered by priority and opened time,
+> groups unassigned records, and returns a triage-ready summary.
+
+---
+
+**Change management**
+```
+How many emergency change requests were raised this month, and which teams
+raised the most?
+```
+> Claude fetches change_request records, aggregates by requested-by group,
+> and returns a ranked breakdown.
+
+---
+
+**User administration**
+```
+Find all active admin accounts that have not logged in for more than 90 days.
+```
+> Claude cross-queries sys_user with last_login_time and the admin role
+> assignment to return a focused list for review.
+
+---
+
+**Update set tracking**
+```
+What update sets are currently in progress, and who owns them?
+```
+> Claude queries sys_update_set for in-progress records and returns a table
+> of update set names, owners, and last-modified dates.
+
+---
+
+### Instance-validated development
+
+This is where the skill becomes a genuine force multiplier. Instead of writing
+code based on guesswork or generic documentation, Claude inspects your actual
+instance first — then writes code that is correct for your specific schema,
+field names, and data.
+
+---
+
+**Writing a Business Rule**
+```
+Write a Business Rule that automatically assigns incidents to the network team
+when the category is 'Network' and the subcategory is 'Email'. Check the
+actual field names and valid choice values on my instance first.
+```
+> Claude queries sys_dictionary to confirm the exact field names on the
+> incident table, queries sys_choice to get the actual stored values for
+> category and subcategory, then generates a Business Rule with the correct
+> field references and values — not guesses.
+
+---
+
+**Building a Script Include**
+```
+Create a Script Include that retrieves all open incidents for a given
+assignment group, sorted by priority. Use the real field names from my instance.
+```
+> Claude inspects the incident table schema, confirms the assignment_group
+> reference field name and the priority field's sort order, then produces
+> a Script Include with accurate GlideRecord queries.
+
+---
+
+**Debugging a broken integration**
+```
+I have an integration that's failing when trying to set the 'state' field on
+change_request to 'Implement'. What is the actual stored value for that state?
+```
+> Claude queries sys_choice for change_request.state and returns the exact
+> database value — solving in seconds what would otherwise require digging
+> through Studio or the platform UI.
+
+---
+
+**Generating a REST API call**
+```
+Write a Python script that fetches all CIs of type 'Linux Server' from my
+instance. Include only the fields that actually exist on my cmdb_ci table.
+```
+> Claude queries sys_dictionary for cmdb_ci, confirms available fields and
+> their API names, then generates a Python script using the correct field list
+> for your specific instance configuration.
+
+---
+
+**Validating assumptions before a migration**
+```
+Before I run my data migration, confirm that the 'u_customer_ref' field exists
+on the incident table and show me its type and max length.
+```
+> Claude queries sys_dictionary and returns the field's internal type,
+> max_length, and mandatory flag — letting you catch schema mismatches before
+> the migration runs.
 
 ---
 
