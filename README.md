@@ -13,10 +13,6 @@
 </p>
 
 <p align="center">
-  <strong>Query any ServiceNow table in plain English, directly inside Claude Code.</strong>
-</p>
-
-<p align="center">
   Ask things like <em>"show me open P1 incidents assigned to the network team"</em> and
   Claude queries the ServiceNow Table REST API, summarises the results, and returns
   them directly in your conversation — no copy-pasting URLs or writing API calls
