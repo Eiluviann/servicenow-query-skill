@@ -1,0 +1,11 @@
+# Credential and instance files — never commit these
+.sn_creds
+.sn_creds_*
+.sn_instances
+
+# Python
+__pycache__/
+*.py[cod]
+
+# macOS
+.DS_Store
