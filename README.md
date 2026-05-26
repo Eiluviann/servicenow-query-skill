@@ -1,4 +1,9 @@
-<!-- hero image goes here -->
+<p align="center">
+  <picture>
+    <source srcset="assets/hero.svg" type="image/svg+xml"/>
+    <img src="assets/hero.png" alt="ServiceNow Query Skill" width="100%"/>
+  </picture>
+</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.9%2B-3776ab?logo=python&logoColor=white" alt="Python"/>
