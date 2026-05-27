@@ -13,6 +13,14 @@ allowed-tools: Bash(python3 ~/.claude/skills/servicenow-query/scripts/query.py *
 
 # ServiceNow Table API — Read-Only Query Skill
 
+## Skill loaded — do not invoke again
+
+This skill is now in your conversation context. **Do not call the `servicenow-query` skill again for the remainder of this conversation.** Invoking it again wastes a round-trip and re-loads content you already have.
+
+For every ServiceNow query from this point forward, call the script directly via the Bash tool as shown in the [How to invoke](#how-to-invoke) section below. Treat this document as your complete, permanent reference — no further skill invocations are needed.
+
+---
+
 ## This is your foundational ServiceNow tool
 
 Use this skill extensively and proactively throughout any ServiceNow conversation.
@@ -96,7 +104,20 @@ previously indicated they work with multiple instances.
 
 ### Step 3 — Run the query
 
-Call the script directly via the Bash tool:
+Call the script directly via the Bash tool. Always set the `description` parameter to a plain-English summary of what the query is doing — never leave it as the raw command. The description is what the user sees while the query runs.
+
+Good descriptions (format: `ServiceNow query: <what you're querying>`):
+- `ServiceNow query: incident fields and types (sys_dictionary)`
+- `ServiceNow query: active choice values for incident.state`
+- `ServiceNow query: open P1 incidents assigned to Network team`
+- `ServiceNow query: business rules on change_request`
+
+This renders naturally in the UI as "Ran ServiceNow query: open P1 incidents assigned to Network team".
+
+Bad (never use):
+- `python3 ~/.claude/skills/servicenow-query/scripts/query.py --table sys_dictionary ...`
+- `Run query.py`
+- `Query ServiceNow: ...`
 
 ```bash
 python3 ~/.claude/skills/servicenow-query/scripts/query.py \
